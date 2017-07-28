@@ -31,6 +31,7 @@
 
 #include "board.h"
 
+#include "queue.h"
 /*****************************************************************************
  * Private types/enumerations/variables
  ****************************************************************************/
@@ -54,7 +55,6 @@
 #define	LED_GREEN				1
 #define	LED_BLUE				2
 
-#define TICKRATE_HZ (10)	/* 10 ticks per second */
 /*****************************************************************************
  * Public types/enumerations/variables
  ****************************************************************************/
@@ -85,13 +85,10 @@ static void Print_Val(const char *str, uint32_t val)
 	buf[8] = 0;
 	DEBUGSTR(str);
 	ret = Hex2Str(buf, val);
-	DEBUGSTR(&buf[8 - ret]);
+	DEBUGSTR(&buf[4]);
+	//DEBUGSTR(&buf[8 - ret]);
 }
 
-uint16_t Buffer[500];
-int Buffer_Index = 0;
-
-int I2C_IDLE = 0;
 /*****************************************************************************
  * Private functions
  ****************************************************************************/
@@ -190,8 +187,7 @@ void LPC_I2C_INTHAND(void)
 	uint32_t state = Chip_I2C_GetPendingInt(LPC_I2C_PORT);
 
 	if (state & (I2C_INTSTAT_MONRDY)) {
-		Buffer[Buffer_Index]=Chip_I2C_Monitor_GetData(LPC_I2C_PORT);
-		Buffer_Index++;
+		QAdd(Chip_I2C_Monitor_GetData(LPC_I2C_PORT));
 		Board_LED_Toggle(LED_RED);
 	}
 	if (state & (I2C_INTSTAT_MONOV)) {
@@ -200,7 +196,6 @@ void LPC_I2C_INTHAND(void)
 	}
 	if (state & (I2C_INTSTAT_MONIDLE)) {
 		Chip_I2C_ClearStatus(LPC_I2C_PORT,I2C_STAT_MONIDLE);
-		I2C_IDLE = 1;
 		Board_LED_Toggle(LED_BLUE);
 	}
 }
@@ -208,24 +203,12 @@ void LPC_I2C_INTHAND(void)
 
 void SysTick_Handler(void)
 {
-	if(I2C_IDLE)
-			{
-				for(int i=Buffer_Index ; i>0 ;i--)
-				{
 
-					//Board_itoa(Buffer[Buffer_Index-i], StrBuff, 16);
-					Print_Val(" 0x",Buffer[Buffer_Index-i]);
-
-				}
-				Board_UARTPutSTR("\r\n");
-			}
 }
 /**
  * @brief	Main routine for I2C example
  * @return	Function should not exit
  */
-
-char StrBuff[10];
 
 int main(void)
 {
@@ -247,13 +230,25 @@ int main(void)
 
 	DEBUGSTR("2 Emulated EEPROM I2C devices using 2 I2C slaves\r\n");
 
-	/* Enable SysTick Timer */
-	SysTick_Config(SystemCoreClock / TICKRATE_HZ);
-
+	uint16_t get_item = 0;
 	/* Test each emulated EEPROM */
 	while (1) {
 		/* Read some data from the emulated EEPROMs */
 
+		if(! (QisEmpty() && flag == 0))
+		{
 
+			if(QGet(&get_item))
+			{
+				Print_Val(" ",get_item);
+			}
+			if(get_item & 0x0400)
+			{
+				Board_UARTPutSTR("\r\n");
+
+//				Print_Val("Buff Length 0x",QBuffLength());
+			}
+//			Board_UARTPutSTR("\r\n");
+		}
 	}
 }
